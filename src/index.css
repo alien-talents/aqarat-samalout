@@ -2,95 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ===========================================
+   عقارات سمالوط — Design System
+   Dark default • Gold accent • Arabic-first
+   All colors HSL only.
+   =========================================== */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Light mode (warm sand palette) */
+    --background: 40 30% 94%;
+    --foreground: 30 20% 9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 30 20% 9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 30 20% 9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 35 55% 41%;          /* gold-bronze */
+    --primary-foreground: 40 30% 98%;
+    --primary-glow: 42 70% 55%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 38 25% 90%;
+    --secondary-foreground: 30 20% 9%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 38 22% 88%;
+    --muted-foreground: 30 8% 38%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 35 55% 41%;
+    --accent-foreground: 40 30% 98%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --success: 145 55% 38%;
+    --success-foreground: 0 0% 98%;
 
-    --radius: 0.5rem;
+    --warning: 38 90% 50%;
+    --warning-foreground: 30 20% 9%;
 
-    --sidebar-background: 0 0% 98%;
+    --border: 35 18% 82%;
+    --input: 35 18% 82%;
+    --ring: 35 55% 41%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --surface-2: 38 25% 92%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --radius: 0.75rem;
+    --radius-pill: 1.25rem;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Gradients */
+    --gradient-gold: linear-gradient(135deg, hsl(35 55% 41%), hsl(42 70% 55%));
+    --gradient-hero: linear-gradient(180deg, hsl(40 30% 94% / 0) 0%, hsl(40 30% 94%) 100%);
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Shadows (soft, no heavy drops) */
+    --shadow-card: 0 1px 2px hsl(30 20% 9% / 0.04), 0 0 0 0.5px hsl(35 18% 75%);
+    --shadow-elevated: 0 8px 24px -8px hsl(30 20% 9% / 0.12);
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 4%;
+    --foreground: 40 20% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 7%;
+    --card-foreground: 40 20% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 40 20% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 42 56% 54%;          /* warm gold */
+    --primary-foreground: 0 0% 7%;
+    --primary-glow: 42 75% 68%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 40 20% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 35 8% 55%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 42 56% 54%;
+    --accent-foreground: 0 0% 7%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --success: 145 50% 45%;
+    --success-foreground: 0 0% 7%;
+
+    --warning: 38 90% 55%;
+    --warning-foreground: 0 0% 7%;
+
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 42 56% 54%;
+
+    --surface-2: 0 0% 9%;
+
+    --gradient-gold: linear-gradient(135deg, hsl(42 56% 54%), hsl(42 75% 68%));
+    --gradient-hero: linear-gradient(180deg, hsl(0 0% 4% / 0) 0%, hsl(0 0% 4%) 100%);
+
+    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.4), 0 0 0 0.5px hsl(0 0% 16%);
+    --shadow-elevated: 0 12px 32px -8px hsl(0 0% 0% / 0.6);
   }
 }
 
@@ -99,7 +113,54 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-family: 'Tajawal', system-ui, sans-serif;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "kern", "liga", "ss01";
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Playfair Display', 'Tajawal', serif;
+    @apply tracking-tight;
+  }
+
+  /* Numbers, prices, phone — keep LTR */
+  .ltr-num {
+    direction: ltr;
+    unicode-bidi: embed;
+    display: inline-block;
+  }
+
+  /* Prevent layout shift from RTL scrollbars */
+  html { scrollbar-gutter: stable; }
+}
+
+@layer components {
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-border bg-card px-4 py-2 text-sm font-medium transition-colors;
+  }
+
+  .pill-active {
+    @apply border-primary bg-primary text-primary-foreground;
+  }
+
+  .surface-card {
+    @apply rounded-[var(--radius)] bg-card;
+    box-shadow: var(--shadow-card);
+  }
+
+  .surface-elevated {
+    @apply rounded-[var(--radius)] bg-card;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .gradient-text {
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
