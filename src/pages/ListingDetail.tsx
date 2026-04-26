@@ -1,25 +1,37 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, BedDouble, Building, ChevronLeft, ChevronRight, Crown, MapPin, Maximize2, Phone, Layers } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  ArrowRight, BedDouble, Building, ChevronLeft, ChevronRight, Crown,
+  MapPin, Maximize2, Phone, Layers, Heart, Share2, Flag, Eye, Clock, AlertTriangle,
+} from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ListingCard } from "@/components/ListingCard";
+import { ReportDialog } from "@/components/ReportDialog";
 import { Button } from "@/components/ui/button";
-import { getListing, getListings } from "@/lib/store";
+import {
+  getListing, getListings, isSaved, toggleSaved, trackView, trackWaClick, listingStatus,
+} from "@/lib/store";
 import type { Listing } from "@/lib/types";
 import { PROPERTY_TYPE_LABELS } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [listing, setListing] = useState<Listing | undefined>();
   const [imgIdx, setImgIdx] = useState(0);
+  const [saved, setSaved] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     const l = getListing(id);
     setListing(l);
     setImgIdx(0);
+    setSaved(isSaved(id));
+    if (l) trackView(id);
   }, [id]);
 
   if (!listing) {
@@ -35,6 +47,7 @@ export default function ListingDetail() {
     );
   }
 
+  const status = listingStatus(listing);
   const similar = getListings()
     .filter((l) => l.isApproved && l.id !== listing.id && (l.locationName === listing.locationName || l.propertyType === listing.propertyType))
     .slice(0, 4);
@@ -43,6 +56,37 @@ export default function ListingDetail() {
   const waText = encodeURIComponent(`السلام عليكم، مهتم بالعقار: ${listing.titleAr}`);
   const waLink = `https://wa.me/${phoneClean}?text=${waText}`;
   const telLink = `tel:${listing.phone}`;
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+
+  const onSave = () => {
+    const next = toggleSaved(listing.id);
+    setSaved(next);
+    toast.success(next ? "تم حفظ الإعلان" : "تمت إزالته من المحفوظات");
+  };
+
+  const onShare = async () => {
+    const data = {
+      title: listing.titleAr,
+      text: `${listing.titleAr} — ${listing.price.toLocaleString("en-US")} جنيه`,
+      url: shareUrl,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(data);
+        return;
+      } catch {/* user cancel */}
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("تم نسخ رابط الإعلان");
+    } catch {
+      toast.error("تعذر النسخ");
+    }
+  };
+
+  const shareWaLink = `https://wa.me/?text=${encodeURIComponent(`${listing.titleAr}\n${shareUrl}`)}`;
+
+  const onWaClick = () => trackWaClick(listing.id);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -55,6 +99,19 @@ export default function ListingDetail() {
         >
           <ArrowRight className="h-4 w-4" /> الرجوع
         </button>
+
+        {status !== "live" && (
+          <div className={cn(
+            "rounded-lg border p-3 mb-4 text-sm flex items-center gap-2",
+            status === "pending" && "bg-warning/10 border-warning/40 text-warning",
+            status === "expired" && "bg-muted border-border text-muted-foreground",
+            status === "rejected" && "bg-destructive/10 border-destructive/40 text-destructive",
+          )}>
+            {status === "pending" && <><Clock className="h-4 w-4" /> هذا الإعلان قيد المراجعة وغير ظاهر للمستخدمين بعد.</>}
+            {status === "expired" && <><Clock className="h-4 w-4" /> هذا الإعلان منتهي الصلاحية.</>}
+            {status === "rejected" && <><AlertTriangle className="h-4 w-4" /> تم رفض الإعلان: {listing.rejectionReason}</>}
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Gallery + body */}
@@ -70,12 +127,14 @@ export default function ListingDetail() {
                   <button
                     onClick={() => setImgIdx((i) => (i - 1 + listing.images.length) % listing.images.length)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background"
+                    aria-label="السابق"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
                   <button
                     onClick={() => setImgIdx((i) => (i + 1) % listing.images.length)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background"
+                    aria-label="التالي"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
@@ -84,6 +143,7 @@ export default function ListingDetail() {
                       <button
                         key={i}
                         onClick={() => setImgIdx(i)}
+                        aria-label={`صورة ${i + 1}`}
                         className={`h-1.5 rounded-full transition-all ${
                           i === imgIdx ? "w-6 bg-primary" : "w-1.5 bg-background/70"
                         }`}
@@ -103,6 +163,25 @@ export default function ListingDetail() {
                     <Crown className="h-3 w-3" /> مميز
                   </span>
                 )}
+              </div>
+              <div className="absolute top-4 left-4 flex gap-2">
+                <button
+                  onClick={onSave}
+                  aria-label={saved ? "إزالة من المحفوظات" : "حفظ"}
+                  className={cn(
+                    "h-10 w-10 rounded-full backdrop-blur-md flex items-center justify-center",
+                    saved ? "bg-primary text-primary-foreground" : "bg-background/80 hover:bg-background"
+                  )}
+                >
+                  <Heart className={cn("h-4 w-4", saved && "fill-current")} />
+                </button>
+                <button
+                  onClick={onShare}
+                  aria-label="مشاركة"
+                  className="h-10 w-10 rounded-full bg-background/80 backdrop-blur-md hover:bg-background flex items-center justify-center"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -131,6 +210,18 @@ export default function ListingDetail() {
                   {listing.descriptionAr}
                 </p>
               </div>
+
+              <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5" /> <span className="ltr-num">{listing.views || 0}</span> مشاهدة
+                </span>
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="inline-flex items-center gap-1.5 hover:text-destructive transition-colors"
+                >
+                  <Flag className="h-3.5 w-3.5" /> الإعلان مش صح؟ بلغنا
+                </button>
+              </div>
             </div>
           </div>
 
@@ -145,7 +236,7 @@ export default function ListingDetail() {
                 </span>
               </div>
               <div className="mt-6 space-y-2">
-                <a href={waLink} target="_blank" rel="noopener noreferrer" className="block">
+                <a href={waLink} target="_blank" rel="noopener noreferrer" onClick={onWaClick} className="block">
                   <Button className="w-full bg-success text-success-foreground hover:bg-success/90 h-12">
                     تواصل على واتساب
                   </Button>
@@ -153,6 +244,11 @@ export default function ListingDetail() {
                 <a href={telLink} className="block">
                   <Button variant="outline" className="w-full h-12">
                     <Phone className="h-4 w-4 ml-2" /> اتصال
+                  </Button>
+                </a>
+                <a href={shareWaLink} target="_blank" rel="noopener noreferrer" className="block">
+                  <Button variant="ghost" className="w-full h-10 text-sm">
+                    <Share2 className="h-4 w-4 ml-2" /> شارك على واتساب
                   </Button>
                 </a>
               </div>
@@ -176,6 +272,8 @@ export default function ListingDetail() {
           </section>
         )}
       </div>
+
+      <ReportDialog listingId={listing.id} open={reportOpen} onOpenChange={setReportOpen} />
 
       <Footer />
     </div>

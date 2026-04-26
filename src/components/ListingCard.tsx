@@ -1,9 +1,31 @@
 import { Link } from "react-router-dom";
-import { MapPin, Maximize2, BedDouble, Crown } from "lucide-react";
+import { MapPin, Maximize2, BedDouble, Crown, Heart, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { PROPERTY_TYPE_LABELS } from "@/lib/types";
+import { isSaved, toggleSaved, listingStatus } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-export function ListingCard({ listing }: { listing: Listing }) {
+export function ListingCard({ listing, showStatus }: { listing: Listing; showStatus?: boolean }) {
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setSaved(isSaved(listing.id));
+    sync();
+    window.addEventListener("samalot:saved-changed", sync);
+    return () => window.removeEventListener("samalot:saved-changed", sync);
+  }, [listing.id]);
+
+  const onSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = toggleSaved(listing.id);
+    toast.success(next ? "تم حفظ الإعلان" : "تم إزالة الإعلان من المحفوظات");
+  };
+
+  const status = listingStatus(listing);
+
   return (
     <Link
       to={`/listing/${listing.id}`}
@@ -29,7 +51,29 @@ export function ListingCard({ listing }: { listing: Listing }) {
               <Crown className="h-3 w-3" /> مميز
             </span>
           )}
+          {showStatus && status === "pending" && (
+            <span className="pill !py-1 !px-2.5 !text-[11px] bg-warning/20 text-warning border-warning/40">
+              <Clock className="h-3 w-3" /> قيد المراجعة
+            </span>
+          )}
+          {showStatus && status === "expired" && (
+            <span className="pill !py-1 !px-2.5 !text-[11px] bg-muted text-muted-foreground border-border">
+              منتهي
+            </span>
+          )}
         </div>
+        <button
+          onClick={onSave}
+          aria-label={saved ? "إزالة من المحفوظات" : "حفظ الإعلان"}
+          className={cn(
+            "absolute top-3 left-3 h-9 w-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all",
+            saved
+              ? "bg-primary text-primary-foreground"
+              : "bg-background/80 text-foreground hover:bg-background"
+          )}
+        >
+          <Heart className={cn("h-4 w-4", saved && "fill-current")} />
+        </button>
       </div>
       <div className="p-4 space-y-3">
         <div className="flex items-baseline justify-between gap-2">

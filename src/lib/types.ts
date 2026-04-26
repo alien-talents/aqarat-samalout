@@ -32,6 +32,8 @@ export interface SeekerProfile {
   isNotified: boolean;
 }
 
+export type ListingStatus = "pending" | "approved" | "rejected" | "hidden";
+
 export interface Listing {
   id: string;
   createdAt: string;
@@ -51,11 +53,34 @@ export interface Listing {
   images: string[];           // URLs (data URLs in MVP)
   isFeatured: boolean;
   isApproved: boolean;
+  rejectionReason?: string;
   packageType: PackageType;
   listerType: ListerType;
   listerName: string;
   expiresAt: string;
+  views?: number;
+  waClicks?: number;
+  isPaid?: boolean;
+  paidAt?: string;
 }
+
+export interface Report {
+  id: string;
+  listingId: string;
+  reason: string;
+  notes?: string;
+  createdAt: string;
+  resolved?: boolean;
+}
+
+export const REPORT_REASONS = [
+  "إعلان مكرر",
+  "معلومات غير صحيحة",
+  "صور غير حقيقية",
+  "نصب أو احتيال",
+  "السعر غير منطقي",
+  "سبب آخر",
+];
 
 export const AREAS = [
   "سمالوط — وسط البلد",

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, ChevronLeft, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   AREAS,
@@ -21,11 +22,19 @@ import {
 import { saveProfile, uid, nowISO } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["النية", "السبب", "المنطقة", "نوع العقار", "الميزانية", "نمط الحياة", "بياناتك"];
+const COMMERCIAL_TAGS = [
+  "على شارع رئيسي",
+  "منطقة سوق",
+  "منطقة صناعية",
+  "بجوار جامعات أو مدارس",
+  "موقف سيارات قريب",
+  "كثافة سكانية عالية",
+];
 
 export default function Onboarding() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [askSell, setAskSell] = useState(false); // post-completion prompt for "both"
   const [data, setData] = useState<Partial<SeekerProfile>>({
     intent: undefined,
     reason: undefined,
@@ -50,16 +59,53 @@ export default function Onboarding() {
     return a.includes(v) ? a.filter((x) => x !== v) : [...a, v];
   };
 
-  const canNext = () => {
-    switch (step) {
-      case 0: return !!data.intent;
-      case 1: return !!data.reason;
-      case 2: return (data.locations?.length || 0) > 0;
-      case 3: return (data.propertyTypes?.length || 0) > 0 && !!data.areaPref;
-      case 4: return !!data.budgetMax && !!data.timeline;
-      case 5: return true;
-      case 6: return !!data.name && !!data.phone && data.phone.length >= 10;
+  // Conditional flags
+  const isRent = data.intent === "rent";
+  const isSell = data.intent === "sell";
+  const hasLand = (data.propertyTypes || []).some((t) => t === "land_agri" || t === "land_build");
+  const hasCommercial = (data.propertyTypes || []).includes("commercial");
+  const isBoth = data.intent === "both";
+
+  // Seller flow uses fewer steps: intent → property type → location → asking price → contact
+  const STEPS_BUY = useMemo(
+    () => ["النية", "السبب", "المنطقة", "نوع العقار", "الميزانية", "نمط الحياة", "بياناتك"],
+    [],
+  );
+  const STEPS_SELL = useMemo(
+    () => ["النية", "نوع العقار", "المنطقة", "السعر المطلوب", "بياناتك"],
+    [],
+  );
+  const STEPS = isSell ? STEPS_SELL : STEPS_BUY;
+
+  // Set sensible budget range based on intent
+  const budget = data.budgetMax ?? (isRent ? 3000 : 500000);
+  const budgetMin = isRent ? 500 : 50000;
+  const budgetMax = isRent ? 20000 : 2000000;
+  const budgetStep = isRent ? 100 : 10000;
+
+  const lifestyleSource = hasCommercial && !isRent ? COMMERCIAL_TAGS : LIFESTYLE_TAGS;
+
+  const canNext = (): boolean => {
+    if (isSell) {
+      switch (step) {
+        case 0: return !!data.intent;
+        case 1: return (data.propertyTypes?.length || 0) > 0;
+        case 2: return (data.locations?.length || 0) > 0;
+        case 3: return !!data.budgetMax && data.budgetMax > 0;
+        case 4: return !!data.name && !!data.phone && data.phone.length >= 10;
+      }
+    } else {
+      switch (step) {
+        case 0: return !!data.intent;
+        case 1: return !!data.reason;
+        case 2: return (data.locations?.length || 0) > 0;
+        case 3: return (data.propertyTypes?.length || 0) > 0 && (hasLand || !!data.areaPref);
+        case 4: return !!data.budgetMax && !!data.timeline;
+        case 5: return true;
+        case 6: return !!data.name && !!data.phone && data.phone.length >= 10;
+      }
     }
+    return false;
   };
 
   const finish = () => {
@@ -69,20 +115,32 @@ export default function Onboarding() {
       name: data.name!,
       phone: data.phone!,
       intent: data.intent!,
-      reason: data.reason!,
+      reason: data.reason ?? "live",
       locations: data.locations || [],
       propertyTypes: data.propertyTypes || [],
       areaPref: data.areaPref || "",
       roomsPref: data.roomsPref || "",
       budgetMax: data.budgetMax || 0,
-      timeline: data.timeline!,
+      timeline: data.timeline ?? "6m",
       lifestyleTags: data.lifestyleTags || [],
       locationNotes: data.locationNotes || "",
       extraNotes: data.extraNotes || "",
       isNotified: true,
     };
     saveProfile(profile);
-    toast.success("تم إنشاء حسابك بنجاح", { description: "هنبعتلك إشعار لما يجي عرض يناسبك" });
+    toast.success("تم إنشاء حسابك بنجاح", {
+      description: isSell
+        ? "هنوصلك بالباحثين المهتمين بعقارك"
+        : "هنبعتلك إشعار لما يجي عرض يناسبك",
+    });
+    if (isSell) {
+      navigate("/post");
+      return;
+    }
+    if (isBoth) {
+      setAskSell(true);
+      return;
+    }
     navigate("/profile");
   };
 
@@ -103,6 +161,7 @@ export default function Onboarding() {
       </div>
 
       <div className="surface-card p-6 md:p-8 min-h-[400px]">
+        {/* Step 0 — Intent (always) */}
         {step === 0 && (
           <Step title="بتدور على إيه؟" subtitle="اختار اللي بيعبر عنك دلوقتي">
             <div className="grid sm:grid-cols-2 gap-3">
@@ -118,7 +177,35 @@ export default function Onboarding() {
           </Step>
         )}
 
-        {step === 1 && (
+        {/* Seller flow */}
+        {isSell && step === 1 && (
+          <Step title="نوع العقار اللي بتبيعه؟" subtitle="اختار نوع أو أكتر">
+            <PropertyTypeGrid data={data} update={update} toggleArr={toggleArr} />
+          </Step>
+        )}
+        {isSell && step === 2 && (
+          <Step title="منطقة العقار" subtitle="اختار المنطقة">
+            <LocationGrid data={data} update={update} toggleArr={toggleArr} />
+          </Step>
+        )}
+        {isSell && step === 3 && (
+          <Step title="السعر المطلوب" subtitle="حدد السعر المتوقع للعقار">
+            <BudgetSlider
+              value={budget}
+              min={50000}
+              max={5000000}
+              step={10000}
+              onChange={(v) => update("budgetMax", v)}
+              suffix="جنيه"
+            />
+          </Step>
+        )}
+        {isSell && step === 4 && (
+          <ContactStep data={data} update={update} note="هتقدر تكمل تفاصيل العقار وترفع الصور بعد ما تنشئ الحساب." />
+        )}
+
+        {/* Buy/Rent/Both flow */}
+        {!isSell && step === 1 && (
           <Step title="ليه؟" subtitle="إيه السبب اللي بيخليك تدور على عقار؟">
             <div className="grid sm:grid-cols-2 gap-3">
               {(Object.keys(REASON_LABELS) as Reason[]).map((k) => (
@@ -133,23 +220,9 @@ export default function Onboarding() {
           </Step>
         )}
 
-        {step === 2 && (
+        {!isSell && step === 2 && (
           <Step title="المنطقة اللي بتفضلها" subtitle="اختار منطقة أو أكتر">
-            <div className="flex flex-wrap gap-2">
-              {AREAS.map((a) => (
-                <PillChoice
-                  key={a}
-                  selected={data.locations?.includes(a)}
-                  onClick={() => update("locations", toggleArr(data.locations, a))}
-                  label={a}
-                />
-              ))}
-              <PillChoice
-                selected={data.locations?.includes("مفيش تفضيل")}
-                onClick={() => update("locations", toggleArr(data.locations, "مفيش تفضيل"))}
-                label="مفيش تفضيل"
-              />
-            </div>
+            <LocationGrid data={data} update={update} toggleArr={toggleArr} />
             <div className="mt-6">
               <label className="text-sm font-medium mb-2 block">ملاحظات إضافية عن المنطقة (اختياري)</label>
               <Input
@@ -161,71 +234,62 @@ export default function Onboarding() {
           </Step>
         )}
 
-        {step === 3 && (
+        {!isSell && step === 3 && (
           <Step title="نوع العقار" subtitle="اختار نوع أو أكتر">
-            <div className="flex flex-wrap gap-2 mb-6">
-              {(Object.keys(PROPERTY_TYPE_LABELS) as PropertyType[]).map((k) => (
-                <PillChoice
-                  key={k}
-                  selected={data.propertyTypes?.includes(k)}
-                  onClick={() => update("propertyTypes", toggleArr(data.propertyTypes, k))}
-                  label={PROPERTY_TYPE_LABELS[k]}
-                />
-              ))}
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">المساحة</label>
-                <select
-                  value={data.areaPref}
-                  onChange={(e) => update("areaPref", e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">اختار</option>
-                  <option value="<80">أقل من 80م²</option>
-                  <option value="80-120">80 - 120م²</option>
-                  <option value="120-200">120 - 200م²</option>
-                  <option value=">200">أكتر من 200م²</option>
-                </select>
+            <PropertyTypeGrid data={data} update={update} toggleArr={toggleArr} />
+            {!hasLand && (
+              <div className="grid sm:grid-cols-2 gap-4 mt-6">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">المساحة</label>
+                  <select
+                    value={data.areaPref}
+                    onChange={(e) => update("areaPref", e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">اختار</option>
+                    <option value="<80">أقل من 80م²</option>
+                    <option value="80-120">80 - 120م²</option>
+                    <option value="120-200">120 - 200م²</option>
+                    <option value=">200">أكتر من 200م²</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">عدد الغرف</label>
+                  <select
+                    value={data.roomsPref}
+                    onChange={(e) => update("roomsPref", e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">مش مهم</option>
+                    <option value="1">غرفة واحدة</option>
+                    <option value="2">غرفتين</option>
+                    <option value="3">٣ غرف</option>
+                    <option value="4+">٤ غرف أو أكتر</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">عدد الغرف</label>
-                <select
-                  value={data.roomsPref}
-                  onChange={(e) => update("roomsPref", e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">مش مهم</option>
-                  <option value="1">غرفة واحدة</option>
-                  <option value="2">غرفتين</option>
-                  <option value="3">٣ غرف</option>
-                  <option value="4+">٤ غرف أو أكتر</option>
-                </select>
+            )}
+            {hasLand && (
+              <div className="mt-6 rounded-lg bg-secondary p-3 text-sm text-muted-foreground">
+                للأراضي، هنركز على المساحة والموقع — الغرف مش مطلوبة.
               </div>
-            </div>
+            )}
           </Step>
         )}
 
-        {step === 4 && (
-          <Step title="الميزانية والوقت" subtitle="حدد الحد الأقصى للسعر والمدة المتوقعة">
-            <div>
-              <label className="text-sm font-medium mb-2 block">الحد الأقصى للميزانية</label>
-              <input
-                type="range"
-                min={50000}
-                max={2000000}
-                step={10000}
-                value={data.budgetMax}
-                onChange={(e) => update("budgetMax", Number(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <div className="text-center mt-2">
-                <span className="font-display text-3xl font-bold text-primary ltr-num">
-                  {(data.budgetMax || 0).toLocaleString("en-US")}
-                </span>
-                <span className="text-sm text-muted-foreground mr-2">جنيه</span>
-              </div>
-            </div>
+        {!isSell && step === 4 && (
+          <Step
+            title={isRent ? "الميزانية الشهرية والمدة" : "الميزانية والوقت"}
+            subtitle={isRent ? "حدد الإيجار الشهري المتوقع" : "حدد الحد الأقصى للسعر والمدة المتوقعة"}
+          >
+            <BudgetSlider
+              value={budget}
+              min={budgetMin}
+              max={budgetMax}
+              step={budgetStep}
+              onChange={(v) => update("budgetMax", v)}
+              suffix={isRent ? "جنيه / شهر" : "جنيه"}
+            />
             <div className="mt-8">
               <label className="text-sm font-medium mb-3 block">المدة المتوقعة</label>
               <div className="grid grid-cols-3 gap-3">
@@ -242,10 +306,13 @@ export default function Onboarding() {
           </Step>
         )}
 
-        {step === 5 && (
-          <Step title="نمط الحياة" subtitle="إيه اللي مهم بالنسبة لك في المنطقة؟ (اختياري)">
+        {!isSell && step === 5 && (
+          <Step
+            title={hasCommercial ? "اللي مهم في موقع المحل" : "نمط الحياة"}
+            subtitle="إيه اللي مهم بالنسبة لك في المنطقة؟ (اختياري)"
+          >
             <div className="flex flex-wrap gap-2 mb-6">
-              {LIFESTYLE_TAGS.map((t) => (
+              {lifestyleSource.map((t) => (
                 <PillChoice
                   key={t}
                   selected={data.lifestyleTags?.includes(t)}
@@ -266,37 +333,8 @@ export default function Onboarding() {
           </Step>
         )}
 
-        {step === 6 && (
-          <Step title="بياناتك" subtitle="عشان نقدر نتواصل معاك ونبعتلك العروض المناسبة">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">الاسم</label>
-                <Input
-                  value={data.name}
-                  onChange={(e) => update("name", e.target.value)}
-                  placeholder="اسمك الأول"
-                  maxLength={50}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">رقم الواتساب</label>
-                <Input
-                  value={data.phone}
-                  onChange={(e) => update("phone", e.target.value.replace(/[^\d+]/g, ""))}
-                  placeholder="+201xxxxxxxxx"
-                  dir="ltr"
-                  className="text-left"
-                  maxLength={15}
-                />
-              </div>
-              <div className="rounded-lg bg-secondary p-4 text-sm flex gap-3 items-start">
-                <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                <span className="text-muted-foreground leading-relaxed">
-                  هنبعتلك إشعار على واتساب لما يجي عرض يناسب اهتماماتك — مش هنزعجك. أقصى ٣ إشعارات في الأسبوع.
-                </span>
-              </div>
-            </div>
-          </Step>
+        {!isSell && step === 6 && (
+          <ContactStep data={data} update={update} />
         )}
       </div>
 
@@ -325,11 +363,154 @@ export default function Onboarding() {
             className="bg-gradient-gold text-primary-foreground hover:opacity-90 min-w-[140px]"
           >
             <Check className="h-4 w-4 ml-1" />
-            إنشاء الحساب
+            {isSell ? "إنشاء حساب وإضافة العقار" : "إنشاء الحساب"}
           </Button>
         )}
       </div>
+
+      {/* Both intent — post-finish prompt */}
+      <Dialog open={askSell} onOpenChange={setAskSell}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">عندك عقار تبيعه كمان؟</DialogTitle>
+            <DialogDescription>
+              تمام، حسابك جاهز. تحب تضيف إعلان عقار للبيع دلوقتي؟
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => { setAskSell(false); navigate("/profile"); }}>
+              لاحقاً
+            </Button>
+            <Button
+              onClick={() => navigate("/post")}
+              className="bg-gradient-gold text-primary-foreground hover:opacity-90"
+            >
+              أضف إعلان دلوقتي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function PropertyTypeGrid({
+  data, update, toggleArr,
+}: {
+  data: Partial<SeekerProfile>;
+  update: <K extends keyof SeekerProfile>(k: K, v: SeekerProfile[K]) => void;
+  toggleArr: <T,>(arr: T[] | undefined, v: T) => T[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {(Object.keys(PROPERTY_TYPE_LABELS) as PropertyType[]).map((k) => (
+        <PillChoice
+          key={k}
+          selected={data.propertyTypes?.includes(k)}
+          onClick={() => update("propertyTypes", toggleArr(data.propertyTypes, k))}
+          label={PROPERTY_TYPE_LABELS[k]}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LocationGrid({
+  data, update, toggleArr,
+}: {
+  data: Partial<SeekerProfile>;
+  update: <K extends keyof SeekerProfile>(k: K, v: SeekerProfile[K]) => void;
+  toggleArr: <T,>(arr: T[] | undefined, v: T) => T[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {AREAS.map((a) => (
+        <PillChoice
+          key={a}
+          selected={data.locations?.includes(a)}
+          onClick={() => update("locations", toggleArr(data.locations, a))}
+          label={a}
+        />
+      ))}
+      <PillChoice
+        selected={data.locations?.includes("مفيش تفضيل")}
+        onClick={() => update("locations", toggleArr(data.locations, "مفيش تفضيل"))}
+        label="مفيش تفضيل"
+      />
+    </div>
+  );
+}
+
+function BudgetSlider({
+  value, min, max, step, onChange, suffix,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  suffix: string;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium mb-2 block">الحد الأقصى</label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-primary"
+      />
+      <div className="text-center mt-2">
+        <span className="font-display text-3xl font-bold text-primary ltr-num">
+          {value.toLocaleString("en-US")}
+        </span>
+        <span className="text-sm text-muted-foreground mr-2">{suffix}</span>
+      </div>
+    </div>
+  );
+}
+
+function ContactStep({
+  data, update, note,
+}: {
+  data: Partial<SeekerProfile>;
+  update: <K extends keyof SeekerProfile>(k: K, v: SeekerProfile[K]) => void;
+  note?: string;
+}) {
+  return (
+    <Step title="بياناتك" subtitle="عشان نقدر نتواصل معاك ونبعتلك العروض المناسبة">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">الاسم</label>
+          <Input
+            value={data.name}
+            onChange={(e) => update("name", e.target.value.slice(0, 50))}
+            placeholder="اسمك الأول"
+            maxLength={50}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium mb-2 block">رقم الواتساب</label>
+          <Input
+            value={data.phone}
+            onChange={(e) => update("phone", e.target.value.replace(/[^\d+]/g, ""))}
+            placeholder="+201xxxxxxxxx"
+            dir="ltr"
+            className="text-left"
+            maxLength={15}
+          />
+        </div>
+        <div className="rounded-lg bg-secondary p-4 text-sm flex gap-3 items-start">
+          <Sparkles className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <span className="text-muted-foreground leading-relaxed">
+            {note ?? "هنبعتلك إشعار على واتساب لما يجي عرض يناسب اهتماماتك — مش هنزعجك. أقصى ٣ إشعارات في الأسبوع."}
+          </span>
+        </div>
+      </div>
+    </Step>
   );
 }
 
