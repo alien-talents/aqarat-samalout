@@ -1,10 +1,12 @@
-import type { Listing, SeekerProfile } from "./types";
+import type { Listing, Report, SeekerProfile } from "./types";
 import { SEED_LISTINGS } from "./seed";
 
 const KEYS = {
   profile: "samalot.profile",
   listings: "samalot.listings",
   seeded: "samalot.seeded.v1",
+  saved: "samalot.saved",
+  reports: "samalot.reports",
 } as const;
 
 // ---------- Profile ----------
