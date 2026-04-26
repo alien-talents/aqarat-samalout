@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, Sparkles, ArrowLeft } from "lucide-react";
+import { Search, Sparkles, ArrowLeft, Plus, ArrowUpDown, Inbox } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ListingCard } from "@/components/ListingCard";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import heroImg from "@/assets/samalot-hero.jpg";
 
 type Filter = "all" | "sale" | "rent" | "land" | "samalot" | "village";
+type Sort = "relevance" | "newest" | "price_asc" | "price_desc";
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "الكل" },
@@ -22,21 +23,33 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "village", label: "القرى" },
 ];
 
+const SORTS: { id: Sort; label: string }[] = [
+  { id: "relevance", label: "الأنسب" },
+  { id: "newest", label: "الأحدث" },
+  { id: "price_asc", label: "السعر: الأقل أولاً" },
+  { id: "price_desc", label: "السعر: الأعلى أولاً" },
+];
+
 export default function Index() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [profile, setProfile] = useState<SeekerProfile | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<Sort>("relevance");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const refresh = () => {
       setListings(getListings().filter((l) => l.isApproved));
       setProfile(getProfile());
+      setLoading(false);
     };
-    refresh();
+    // tiny artificial delay so skeleton is visible on first paint
+    const t = setTimeout(refresh, 200);
     window.addEventListener("samalot:listings-changed", refresh);
     window.addEventListener("samalot:profile-changed", refresh);
     return () => {
+      clearTimeout(t);
       window.removeEventListener("samalot:listings-changed", refresh);
       window.removeEventListener("samalot:profile-changed", refresh);
     };
@@ -55,18 +68,28 @@ export default function Index() {
         (l) => l.titleAr.includes(q) || l.descriptionAr.includes(q) || l.locationName.includes(q)
       );
     }
-    // Sort: featured first, then by match score (if profile), then by recency
     list.sort((a, b) => {
+      // featured always first within each sort
       if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
-      if (profile) {
-        const sa = matchScore(a, profile);
-        const sb = matchScore(b, profile);
-        if (sa !== sb) return sb - sa;
+      switch (sort) {
+        case "price_asc":
+          return a.price - b.price;
+        case "price_desc":
+          return b.price - a.price;
+        case "newest":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case "relevance":
+        default:
+          if (profile) {
+            const sa = matchScore(a, profile);
+            const sb = matchScore(b, profile);
+            if (sa !== sb) return sb - sa;
+          }
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     return list;
-  }, [listings, filter, search, profile]);
+  }, [listings, filter, search, profile, sort]);
 
   const matched = profile ? listings.filter((l) => matchScore(l, profile) >= 2).slice(0, 4) : [];
 
@@ -94,6 +117,11 @@ export default function Index() {
             <p className="mt-4 text-lg text-muted-foreground max-w-xl">
               من الملاك مباشرة. مع مكاتب موثوقة. بدون عمولات خفية. إعلانات مفلترة على ذوقك في سمالوط والقرى المجاورة.
             </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <StatPill value={listings.length} label="عقار منشور" />
+              <StatPill value={profile ? 1 : 0} label="مشترك في النشرة" />
+              <StatPill value={3} label="إشعار واتساب أسبوعياً" />
+            </div>
             <div className="mt-8 flex flex-wrap gap-3">
               {!profile && (
                 <Link to="/onboarding">
@@ -139,7 +167,7 @@ export default function Index() {
       <section className="container py-8 md:py-10">
         <div className="flex flex-col md:flex-row gap-3 mb-6">
           <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -147,10 +175,18 @@ export default function Index() {
               className="pr-10"
             />
           </div>
-          <Button variant="outline" className="md:w-auto">
-            <SlidersHorizontal className="h-4 w-4 ml-2" />
-            فلاتر متقدمة
-          </Button>
+          <div className="relative">
+            <ArrowUpDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              className="h-10 w-full md:w-56 rounded-md border border-input bg-background pr-9 pl-3 text-sm"
+            >
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
@@ -172,9 +208,14 @@ export default function Index() {
           </span>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <SkeletonGrid />
+        ) : filtered.length === 0 ? (
           <div className="surface-card p-12 text-center">
-            <p className="text-muted-foreground">مفيش إعلانات مطابقة. جرب فلتر تاني.</p>
+            <div className="mx-auto h-14 w-14 rounded-full bg-secondary flex items-center justify-center mb-3">
+              <Inbox className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground">مفيش نتايج دلوقتي — ارجع قريب أو غيّر الفلتر.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -185,7 +226,42 @@ export default function Index() {
         )}
       </section>
 
+      {/* Floating action button */}
+      <Link
+        to="/post"
+        aria-label="أضف إعلان"
+        className="fixed bottom-6 left-6 z-30 h-14 w-14 rounded-full bg-gradient-gold text-primary-foreground shadow-elevated flex items-center justify-center hover:scale-105 transition-transform md:hidden"
+      >
+        <Plus className="h-6 w-6" />
+      </Link>
+
       <Footer />
+    </div>
+  );
+}
+
+function StatPill({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-pill border border-border bg-card/60 backdrop-blur px-3 py-1.5 text-xs flex items-center gap-2">
+      <span className="font-display font-bold text-primary ltr-num">{value}+</span>
+      <span className="text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="surface-card overflow-hidden">
+          <div className="aspect-[4/3] bg-muted animate-pulse" />
+          <div className="p-4 space-y-3">
+            <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-full bg-muted rounded animate-pulse" />
+            <div className="h-3 w-2/3 bg-muted rounded animate-pulse" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
