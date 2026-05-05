@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Search, Sparkles, Inbox } from "lucide-react";
+import { ArrowRight, Search, Sparkles, Inbox, Loader2 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ListingCard } from "@/components/ListingCard";
@@ -13,7 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getCurrentUser, getListings } from "@/lib/store";
+import { useListings } from "@/hooks/useSupabase";
+import { useSupabaseRealtime } from "@/hooks/useSupabaseRealtime";
+import { getCurrentUser } from "@/lib/store";
 import type { Listing, ListingType, PropertyType } from "@/lib/types";
 import { LISTING_TYPES, PROPERTY_TYPES } from "@/lib/types";
 import { t, useLang } from "@/lib/i18n";
@@ -24,20 +26,21 @@ type Sort = "newest" | "price_asc" | "price_desc";
 
 export default function Index() {
   const lang = useLang();
-  const [listings, setListings] = useState<Listing[]>([]);
   const [filterLT, setFilterLT] = useState<ListingType | "all">("all");
   const [filterPT, setFilterPT] = useState<PropertyType | "all">("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [search, setSearch] = useState("");
   const user = getCurrentUser();
-
-  useEffect(() => {
-    const refresh = () =>
-      setListings(getListings().filter((l) => l.status === "active"));
-    refresh();
-    window.addEventListener("samalot:listings-changed", refresh);
-    return () => window.removeEventListener("samalot:listings-changed", refresh);
-  }, []);
+  
+  // Fetch listings from Supabase
+  const { data: listings = [], isLoading, error } = useListings({
+    status: 'active',
+    listingType: filterLT === "all" ? undefined : filterLT,
+    propertyType: filterPT === "all" ? undefined : filterPT,
+  });
+  
+  // Enable real-time updates
+  useSupabaseRealtime(user?.id);
 
   const filtered = useMemo(() => {
     let list = [...listings];
@@ -173,7 +176,20 @@ export default function Index() {
           </span>
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="surface-card p-12 text-center">
+            <Loader2 className="h-10 w-10 mx-auto mb-3 text-primary animate-spin" />
+            <p className="text-muted-foreground">
+              {lang === "ar" ? "جاري التحميل..." : "Loading..."}
+            </p>
+          </div>
+        ) : error ? (
+          <div className="surface-card p-12 text-center">
+            <p className="text-red-500">
+              {lang === "ar" ? "حدث خطأ في تحميل البيانات" : "Error loading data"}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="surface-card p-12 text-center">
             <Inbox className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
             <p className="text-muted-foreground">{t("mp.no_results", lang)}</p>

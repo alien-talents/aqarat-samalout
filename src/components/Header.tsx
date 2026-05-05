@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, LogOut, Menu, User as UserIcon, Languages } from "lucide-react";
+import { LogOut, Menu, User as UserIcon, Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,23 +9,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
-import { getCurrentUser, getMyNotifications, setSession } from "@/lib/store";
+import { getCurrentUser, setSession } from "@/lib/store";
 import type { User } from "@/lib/types";
 import { setLang, t, useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "./NotificationBell";
+import { PWABadge } from "./PWAInstallPrompt";
 
 export function Header() {
   const lang = useLang();
   const loc = useLocation();
   const nav = useNavigate();
   const [user, setUser] = useState<User | null>(getCurrentUser());
-  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     const refresh = () => {
       const u = getCurrentUser();
       setUser(u);
-      setUnread(u ? getMyNotifications(u.id).filter((n) => !n.isRead).length : 0);
     };
     refresh();
     const events = [
@@ -84,19 +84,11 @@ export function Header() {
 
           {user ? (
             <>
-              <Link to="/dashboard?tab=notifications" className="relative">
-                <Button variant="ghost" size="icon" aria-label="Notifications">
-                  <Bell className="h-4 w-4" />
-                </Button>
-                {unread > 0 && (
-                  <span className="absolute top-1 end-1 h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                    {unread}
-                  </span>
-                )}
-              </Link>
+              <NotificationBell userId={user.id} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
+                    <PWABadge />
                     <UserIcon className="h-4 w-4" />
                     <span className="hidden sm:inline max-w-[120px] truncate">
                       {user.name}

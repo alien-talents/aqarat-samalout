@@ -15,6 +15,8 @@ import Pricing from "./pages/Pricing";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import { RequireAuth } from "./components/RequireAuth";
+import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
+import { NotificationAlert } from "./components/NotificationAlert";
 import { applyLangToDocument, getLang } from "./lib/i18n";
 import { ensureSeed } from "./lib/store";
 
@@ -39,6 +41,10 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          {/* PWA Install Prompt */}
+          <PWAInstallPrompt />
+          {/* Notification Permission Alert */}
+          <NotificationAlert />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />

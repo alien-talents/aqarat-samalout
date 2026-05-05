@@ -14,19 +14,22 @@ import {
   RequestStatusBadge,
 } from "@/components/StatusBadge";
 import {
+  useNotifications,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useSupabase";
+import { useSupabaseRealtime } from "@/hooks/useSupabaseRealtime";
+import {
   bookSlot,
   deleteListing,
   getAppointmentsForUser,
   getCurrentUser,
   getListing,
   getMyListings,
-  getMyNotifications,
   getOpenSlots,
   getProfileByUser,
   getRequestsForOwner,
   getRequestsForUser,
   getUser,
-  markAllNotificationsRead,
   setRequestStatus,
 } from "@/lib/store";
 import { fmtDate, fmtDateTime, fmtPrice, t, useLang } from "@/lib/i18n";
@@ -62,6 +65,11 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Supabase notifications with real-time
+  const { data: supabaseNotifications = [] } = useNotifications(me?.id || '');
+  const markAllRead = useMarkAllNotificationsRead();
+  useSupabaseRealtime(me?.id);
+
   const data = useMemo(() => {
     if (!me) return null;
     return {
@@ -69,12 +77,12 @@ export default function Dashboard() {
       requestsMade: getRequestsForUser(me.id),
       requestsReceived: getRequestsForOwner(me.id),
       appts: getAppointmentsForUser(me.id),
-      notifs: getMyNotifications(me.id),
+      notifs: supabaseNotifications, // Using Supabase notifications
       profile: getProfileByUser(me.id),
       openSlots: getOpenSlots(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.id, tick]);
+  }, [me?.id, tick, supabaseNotifications]);
 
   if (!me || !data) {
     nav("/login");
@@ -167,7 +175,7 @@ export default function Dashboard() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => markAllNotificationsRead(me.id)}
+                onClick={() => markAllRead.mutate(me.id)}
               >
                 {lang === "ar" ? "علّم الكل كمقروء" : "Mark all read"}
               </Button>
