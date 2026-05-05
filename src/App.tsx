@@ -19,6 +19,7 @@ import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { NotificationAlert } from "./components/NotificationAlert";
 import { applyLangToDocument, getLang } from "./lib/i18n";
 import { ensureSeed } from "./lib/store";
+import { isSupabaseConfigured } from "./lib/supabase";
 
 const queryClient = new QueryClient();
 
@@ -38,12 +39,22 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
         <BrowserRouter>
-          {/* PWA Install Prompt */}
+          {!isSupabaseConfigured && (
+            <div style={{
+              background: '#dc2626',
+              color: 'white',
+              padding: '10px 20px',
+              textAlign: 'center',
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '14px',
+            }}>
+              ⚠️ <b>Supabase Not Configured</b> — Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify Environment Variables
+            </div>
+          )}
+          <Toaster />
+          <Sonner />
           <PWAInstallPrompt />
-          {/* Notification Permission Alert */}
           <NotificationAlert />
           <Routes>
             <Route path="/" element={<Index />} />
