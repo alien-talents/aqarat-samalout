@@ -1,292 +1,389 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowRight, BedDouble, Building, ChevronLeft, ChevronRight, Crown,
-  MapPin, Maximize2, Phone, Layers, Heart, Share2, Flag, Eye, Clock, AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  Lock,
+  MapPin,
+  Maximize2,
+  Phone,
+  Sparkles,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { ListingCard } from "@/components/ListingCard";
-import { ReportDialog } from "@/components/ReportDialog";
 import { Button } from "@/components/ui/button";
 import {
-  getListing, getListings, isSaved, toggleSaved, trackView, trackWaClick, listingStatus,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getCurrentPlan,
+  getCurrentUser,
+  getListing,
+  getRequests,
+  getUser,
+  nowISO,
+  saveRequest,
+  trackListingView,
+  uid,
 } from "@/lib/store";
-import type { Listing } from "@/lib/types";
-import { PROPERTY_TYPE_LABELS } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import type { Listing, User } from "@/lib/types";
+import { fmtDate, fmtPrice, fmtSqm, t, useLang } from "@/lib/i18n";
 import { toast } from "sonner";
+import { ListingStatusBadge } from "@/components/StatusBadge";
 
 export default function ListingDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [listing, setListing] = useState<Listing | undefined>();
-  const [imgIdx, setImgIdx] = useState(0);
-  const [saved, setSaved] = useState(false);
-  const [reportOpen, setReportOpen] = useState(false);
+  const { id = "" } = useParams();
+  const lang = useLang();
+  const nav = useNavigate();
+  const me = getCurrentUser();
+  const [listing, setListing] = useState<Listing | undefined>(getListing(id));
+  const [owner, setOwner] = useState<User | undefined>(
+    listing ? getUser(listing.userId) : undefined,
+  );
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [stageNotes, setStageNotes] = useState("");
 
   useEffect(() => {
-    if (!id) return;
-    const l = getListing(id);
-    setListing(l);
-    setImgIdx(0);
-    setSaved(isSaved(id));
-    if (l) trackView(id);
+    trackListingView(id);
+    const refresh = () => {
+      const l = getListing(id);
+      setListing(l);
+      setOwner(l ? getUser(l.userId) : undefined);
+    };
+    refresh();
+    window.addEventListener("samalot:listings-changed", refresh);
+    return () => window.removeEventListener("samalot:listings-changed", refresh);
   }, [id]);
 
   if (!listing) {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
-        <div className="container py-20 text-center flex-1">
-          <h1 className="font-display text-2xl mb-3">الإعلان مش موجود</h1>
-          <Button onClick={() => navigate("/")}>الرجوع للإعلانات</Button>
-        </div>
+        <main className="flex-1 container py-20 text-center">
+          <p className="text-muted-foreground">{t("g.empty", lang)}</p>
+          <Link to="/" className="text-primary underline mt-4 inline-block">
+            ← {t("nav.marketplace", lang)}
+          </Link>
+        </main>
         <Footer />
       </div>
     );
   }
 
-  const status = listingStatus(listing);
-  const similar = getListings()
-    .filter((l) => l.isApproved && l.id !== listing.id && (l.locationName === listing.locationName || l.propertyType === listing.propertyType))
-    .slice(0, 4);
+  const isOwn = me?.id === listing.userId;
+  const plan = getCurrentPlan(me?.id);
+  const isSubscriber = plan === "basic" || plan === "premium" || isOwn || !!me?.isAdmin;
 
-  const phoneClean = listing.whatsapp.replace(/[^\d]/g, "");
-  const waText = encodeURIComponent(`السلام عليكم، مهتم بالعقار: ${listing.titleAr}`);
-  const waLink = `https://wa.me/${phoneClean}?text=${waText}`;
-  const telLink = `tel:${listing.phone}`;
-  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  // Approved request unlocks contact + full address
+  const myRequest = me
+    ? getRequests().find(
+        (r) => r.listingId === listing.id && r.requesterId === me.id,
+      )
+    : undefined;
+  const contactUnlocked =
+    isOwn ||
+    me?.isAdmin ||
+    (myRequest?.status &&
+      [
+        "accepted",
+        "appointment_scheduled",
+        "in_discussion",
+        "negotiating",
+        "deal_done",
+      ].includes(myRequest.status));
 
-  const onSave = () => {
-    const next = toggleSaved(listing.id);
-    setSaved(next);
-    toast.success(next ? "تم حفظ الإعلان" : "تمت إزالته من المحفوظات");
-  };
-
-  const onShare = async () => {
-    const data = {
-      title: listing.titleAr,
-      text: `${listing.titleAr} — ${listing.price.toLocaleString("en-US")} جنيه`,
-      url: shareUrl,
-    };
-    if (navigator.share) {
-      try {
-        await navigator.share(data);
-        return;
-      } catch {/* user cancel */}
+  function submitRequest() {
+    if (!me) {
+      nav(`/login?next=/listings/${listing!.id}`);
+      return;
     }
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("تم نسخ رابط الإعلان");
-    } catch {
-      toast.error("تعذر النسخ");
+    if (!isSubscriber) {
+      nav("/pricing");
+      return;
     }
-  };
-
-  const shareWaLink = `https://wa.me/?text=${encodeURIComponent(`${listing.titleAr}\n${shareUrl}`)}`;
-
-  const onWaClick = () => trackWaClick(listing.id);
+    if (myRequest) {
+      toast.info(
+        lang === "ar" ? "عندك طلب قائم بالفعل" : "You already have a pending request",
+      );
+      return;
+    }
+    saveRequest({
+      id: uid(),
+      createdAt: nowISO(),
+      updatedAt: nowISO(),
+      requesterId: me.id,
+      listingId: listing!.id,
+      listingOwnerId: listing!.userId,
+      status: "pending_admin",
+      stageNotes,
+    });
+    toast.success(t("rq.thanks", lang));
+    setRequestOpen(false);
+    nav("/dashboard?tab=requests");
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-
-      <div className="container py-6">
-        <button
-          onClick={() => navigate(-1)}
+      <main className="flex-1 container py-8">
+        <Link
+          to="/"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
         >
-          <ArrowRight className="h-4 w-4" /> الرجوع
-        </button>
+          <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+          {t("nav.marketplace", lang)}
+        </Link>
 
-        {status !== "live" && (
-          <div className={cn(
-            "rounded-lg border p-3 mb-4 text-sm flex items-center gap-2",
-            status === "pending" && "bg-warning/10 border-warning/40 text-warning",
-            status === "expired" && "bg-muted border-border text-muted-foreground",
-            status === "rejected" && "bg-destructive/10 border-destructive/40 text-destructive",
-          )}>
-            {status === "pending" && <><Clock className="h-4 w-4" /> هذا الإعلان قيد المراجعة وغير ظاهر للمستخدمين بعد.</>}
-            {status === "expired" && <><Clock className="h-4 w-4" /> هذا الإعلان منتهي الصلاحية.</>}
-            {status === "rejected" && <><AlertTriangle className="h-4 w-4" /> تم رفض الإعلان: {listing.rejectionReason}</>}
-          </div>
-        )}
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Gallery + body */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="relative aspect-[16/10] rounded-lg overflow-hidden bg-muted surface-card">
-              <img
-                src={listing.images[imgIdx]}
-                alt={listing.titleAr}
-                className="h-full w-full object-cover"
-              />
-              {listing.images.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setImgIdx((i) => (i - 1 + listing.images.length) % listing.images.length)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background"
-                    aria-label="السابق"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => setImgIdx((i) => (i + 1) % listing.images.length)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background"
-                    aria-label="التالي"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                    {listing.images.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setImgIdx(i)}
-                        aria-label={`صورة ${i + 1}`}
-                        className={`h-1.5 rounded-full transition-all ${
-                          i === imgIdx ? "w-6 bg-primary" : "w-1.5 bg-background/70"
-                        }`}
-                      />
-                    ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-6">
+          {/* Main */}
+          <div className="space-y-6">
+            {/* Photos */}
+            <div className="surface-card overflow-hidden">
+              {isSubscriber && listing.images.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                  {listing.images.map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt=""
+                      className="w-full aspect-[4/3] object-cover"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="aspect-[16/9] bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
+                  <div className="text-center">
+                    <Lock className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                    <p className="font-medium">{t("g.locked", lang)}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {t("g.unlock", lang)}
+                    </p>
+                    <Button
+                      onClick={() => nav("/pricing")}
+                      className="mt-4 bg-gradient-gold text-primary-foreground"
+                    >
+                      {t("ld.subscribe_to_view", lang)}
+                    </Button>
                   </div>
-                </>
+                </div>
               )}
-              <div className="absolute top-4 right-4 flex flex-col gap-2">
-                <span className={`pill !py-1 !px-3 ${
-                  listing.priceType === "sale" ? "bg-primary text-primary-foreground border-primary" : "bg-success text-success-foreground border-success"
-                }`}>
-                  {listing.priceType === "sale" ? "للبيع" : "للإيجار"}
+            </div>
+
+            {/* Summary card (always visible) */}
+            <div className="surface-card p-6 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-pill bg-secondary px-3 py-1 text-xs font-medium">
+                  {t(`lt.${listing.listingType}`, lang)}
+                </span>
+                <span className="rounded-pill bg-secondary px-3 py-1 text-xs font-medium">
+                  {t(`pt.${listing.propertyType}`, lang)}
                 </span>
                 {listing.isFeatured && (
-                  <span className="pill !py-1 !px-3 bg-gradient-gold text-primary-foreground border-transparent">
-                    <Crown className="h-3 w-3" /> مميز
+                  <span className="rounded-pill bg-gradient-gold text-primary-foreground px-3 py-1 text-xs font-medium inline-flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    {t("card.featured", lang)}
                   </span>
                 )}
+                {(isOwn || me?.isAdmin) && <ListingStatusBadge status={listing.status} />}
               </div>
-              <div className="absolute top-4 left-4 flex gap-2">
-                <button
-                  onClick={onSave}
-                  aria-label={saved ? "إزالة من المحفوظات" : "حفظ"}
-                  className={cn(
-                    "h-10 w-10 rounded-full backdrop-blur-md flex items-center justify-center",
-                    saved ? "bg-primary text-primary-foreground" : "bg-background/80 hover:bg-background"
-                  )}
-                >
-                  <Heart className={cn("h-4 w-4", saved && "fill-current")} />
-                </button>
-                <button
-                  onClick={onShare}
-                  aria-label="مشاركة"
-                  className="h-10 w-10 rounded-full bg-background/80 backdrop-blur-md hover:bg-background flex items-center justify-center"
-                >
-                  <Share2 className="h-4 w-4" />
-                </button>
+
+              <div className="flex items-baseline justify-between gap-4 flex-wrap">
+                <span className="font-display text-3xl font-bold gradient-text">
+                  {fmtPrice(listing.priceEgp, lang)}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {t(`prc.${listing.priceType}`, lang)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 border-t border-border">
+                <Stat
+                  icon={<Maximize2 className="h-4 w-4" />}
+                  label={lang === "ar" ? "المساحة" : "Area"}
+                  value={fmtSqm(listing.areaSqm, lang)}
+                />
+                <Stat
+                  icon={<MapPin className="h-4 w-4" />}
+                  label={t("ld.location_public", lang)}
+                  value={`${listing.area}, ${listing.city}`}
+                />
+                <Stat
+                  icon={<Eye className="h-4 w-4" />}
+                  label={lang === "ar" ? "المشاهدات" : "Views"}
+                  value={String(listing.viewCount)}
+                />
               </div>
             </div>
 
+            {/* Side panel content (subscribers) */}
             <div className="surface-card p-6 space-y-4">
-              <div>
-                <span className="text-sm text-muted-foreground">{PROPERTY_TYPE_LABELS[listing.propertyType]}</span>
-                <h1 className="font-display text-2xl md:text-3xl font-bold mt-1 leading-tight">
-                  {listing.titleAr}
-                </h1>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-2">
-                  <MapPin className="h-4 w-4" />
-                  {listing.locationName}
+              <h2 className="font-display text-xl font-bold">
+                {t("ld.full_details", lang)}
+              </h2>
+              {isSubscriber ? (
+                <>
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">
+                      {t("ld.description", lang)}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                      {listing.description}
+                    </p>
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {t("ld.location_full", lang)}
+                    </h3>
+                    {contactUnlocked && listing.fullAddress ? (
+                      <p className="text-sm text-foreground">{listing.fullAddress}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        🔒 {t("ld.location_full_locked", lang)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="border-t border-border pt-4">
+                    <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      {lang === "ar" ? "رقم التواصل" : "Contact phone"}
+                    </h3>
+                    {contactUnlocked ? (
+                      <a
+                        href={`tel:${listing.contactPhone}`}
+                        className="text-primary font-medium ltr-num"
+                      >
+                        {listing.contactPhone}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        🔒 {t("ld.contact_locked", lang)}
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-md border border-border bg-secondary/40 p-6 text-center">
+                  <Lock className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="font-medium">{t("g.locked", lang)}</p>
+                  <Button
+                    onClick={() => nav("/pricing")}
+                    className="mt-3 bg-gradient-gold text-primary-foreground"
+                  >
+                    {t("g.unlock", lang)}
+                  </Button>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-border">
-                <Stat icon={Maximize2} label="المساحة" value={`${listing.areaSqm} م²`} />
-                {listing.rooms > 0 && <Stat icon={BedDouble} label="الغرف" value={String(listing.rooms)} />}
-                {listing.floor > 0 && <Stat icon={Layers} label="الدور" value={String(listing.floor)} />}
-                <Stat icon={Building} label="المُعلِن" value={listing.listerName} />
-              </div>
-
-              <div className="pt-4 border-t border-border">
-                <h2 className="font-bold mb-2">الوصف</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-                  {listing.descriptionAr}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> <span className="ltr-num">{listing.views || 0}</span> مشاهدة
-                </span>
-                <button
-                  onClick={() => setReportOpen(true)}
-                  className="inline-flex items-center gap-1.5 hover:text-destructive transition-colors"
-                >
-                  <Flag className="h-3.5 w-3.5" /> الإعلان مش صح؟ بلغنا
-                </button>
-              </div>
+              )}
             </div>
           </div>
 
           {/* Sidebar */}
-          <aside className="space-y-4">
-            <div className="surface-elevated p-6 sticky top-24">
-              <div className="text-sm text-muted-foreground">السعر</div>
-              <div className="font-display text-3xl font-bold text-primary mt-1">
-                <span className="ltr-num">{listing.price.toLocaleString("en-US")}</span>
-                <span className="text-base font-body text-muted-foreground mr-1">
-                  جنيه{listing.priceType === "rent" ? " / شهر" : ""}
-                </span>
+          <aside className="space-y-4 lg:sticky lg:top-20 self-start">
+            <div className="surface-elevated p-5 space-y-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t("ld.posted_by", lang)}
+              </p>
+              <div>
+                <p className="font-display font-bold">{owner?.name ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {owner ? t(`at.${owner.accountType}`, lang) : ""}
+                </p>
               </div>
-              <div className="mt-6 space-y-2">
-                <a href={waLink} target="_blank" rel="noopener noreferrer" onClick={onWaClick} className="block">
-                  <Button className="w-full bg-success text-success-foreground hover:bg-success/90 h-12">
-                    تواصل على واتساب
-                  </Button>
-                </a>
-                <a href={telLink} className="block">
-                  <Button variant="outline" className="w-full h-12">
-                    <Phone className="h-4 w-4 ml-2" /> اتصال
-                  </Button>
-                </a>
-                <a href={shareWaLink} target="_blank" rel="noopener noreferrer" className="block">
-                  <Button variant="ghost" className="w-full h-10 text-sm">
-                    <Share2 className="h-4 w-4 ml-2" /> شارك على واتساب
-                  </Button>
-                </a>
-              </div>
-              <div className="mt-4 text-xs text-muted-foreground text-center">
-                {listing.listerType === "office" && "مكتب موثّق ✓"}
-                {listing.listerType === "broker" && "وسيط معتمد"}
-                {listing.listerType === "individual" && "إعلان من المالك مباشرة"}
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {fmtDate(listing.createdAt, lang)}
+              </p>
+              {!isOwn && (
+                <Button
+                  className="w-full bg-gradient-gold text-primary-foreground"
+                  onClick={() => {
+                    if (!me) return nav(`/login?next=/listings/${listing.id}`);
+                    if (!isSubscriber) return nav("/pricing");
+                    setRequestOpen(true);
+                  }}
+                  disabled={!!myRequest}
+                >
+                  {myRequest
+                    ? t(`rq.status.${myRequest.status}`, lang)
+                    : t("ld.request_appointment", lang)}
+                  {!myRequest && <ArrowRight className="h-4 w-4 ms-2 rtl:rotate-180" />}
+                </Button>
+              )}
+              {isOwn && (
+                <Button variant="outline" className="w-full" onClick={() => nav("/dashboard?tab=listings")}>
+                  {lang === "ar" ? "إدارة الإعلان" : "Manage listing"}
+                </Button>
+              )}
+            </div>
+
+            <div className="surface-card p-5 text-xs text-muted-foreground space-y-2">
+              <p className="font-semibold text-foreground">
+                {lang === "ar" ? "كيف بيتم التواصل؟" : "How contact works"}
+              </p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>{lang === "ar" ? "تطلب معاد" : "You request an appointment"}</li>
+                <li>{lang === "ar" ? "الإدارة تراجع" : "Admin reviews"}</li>
+                <li>{lang === "ar" ? "البائع يقبل" : "Seller accepts"}</li>
+                <li>{lang === "ar" ? "كل طرف يحجز معاد منفصل مع الإدارة" : "Each party books a separate call with admin"}</li>
+              </ol>
             </div>
           </aside>
         </div>
+      </main>
 
-        {similar.length > 0 && (
-          <section className="mt-12">
-            <h2 className="font-display text-2xl font-bold mb-4">إعلانات مشابهة</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {similar.map((l) => (
-                <ListingCard key={l.id} listing={l} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-
-      <ReportDialog listingId={listing.id} open={reportOpen} onOpenChange={setReportOpen} />
+      <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("ld.request_appointment", lang)}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {lang === "ar"
+              ? "اكتب أي ملاحظات حابب توصلها للإدارة قبل ما يراجعوا طلبك."
+              : "Add any notes you want the admin to see before reviewing."}
+          </p>
+          <Textarea
+            rows={4}
+            value={stageNotes}
+            onChange={(e) => setStageNotes(e.target.value)}
+            placeholder={lang === "ar" ? "ملاحظاتك (اختياري)" : "Your notes (optional)"}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRequestOpen(false)}>
+              {t("g.cancel", lang)}
+            </Button>
+            <Button onClick={submitRequest} className="bg-gradient-gold text-primary-foreground">
+              {t("g.submit", lang)}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>
   );
 }
 
-function Stat({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" /> {label}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+        {icon}
+        {label}
       </div>
-      <div className="font-bold mt-1 text-sm">{value}</div>
+      <div className="text-sm font-medium">{value}</div>
     </div>
   );
 }

@@ -1,145 +1,242 @@
-// Domain types for عقارات سمالوط
-export type Intent = "buy" | "rent" | "sell" | "both";
-export type Reason = "live" | "invest" | "sidehustle" | "necessity" | "relocate";
-export type Timeline = "3m" | "6m" | "1y";
-export type PriceType = "sale" | "rent";
-export type PropertyType =
-  | "apartment"
-  | "house"
-  | "land_agri"
-  | "land_build"
-  | "commercial"
-  | "building";
-export type PackageType = "basic" | "featured" | "office";
-export type ListerType = "individual" | "broker" | "office";
+// Samalot Real Estate — PRD v2 domain types
+// Mirrors §9 Database Schema, frontend-only (localStorage)
 
-export interface SeekerProfile {
+export type AccountType = "individual" | "broker" | "office" | "developer";
+export type GeneralGoal = "sell" | "buy" | "both";
+
+export type SellReason =
+  | "housing"
+  | "investment"
+  | "emergency"
+  | "travel"
+  | "local_move"
+  | "no_longer_needed";
+
+export type BuyReason = "housing" | "investment" | "rental_income" | "family_future";
+
+export type Timeline = "under_1m" | "3m" | "6m" | "1y" | "flexible";
+
+export type PlatformGoal =
+  | "faster_sales"
+  | "organized_sales"
+  | "reach_buyers"
+  | "geographic_expansion";
+
+export type PropertyType =
+  | "residential"
+  | "commercial"
+  | "agricultural"
+  | "industrial"
+  | "mountain";
+
+export type ListingType = "sell" | "buy" | "swap";
+export type PriceType = "fixed" | "negotiable" | "discussable";
+export type ListingStatus = "draft" | "pending_review" | "active" | "closed" | "rejected";
+
+export type SubscriptionPlan = "free" | "basic" | "premium";
+
+export type RequestStatus =
+  | "pending_admin"
+  | "pending_seller"
+  | "accepted"
+  | "rejected"
+  | "appointment_scheduled"
+  | "in_discussion"
+  | "negotiating"
+  | "deal_done"
+  | "deal_failed";
+
+export type AppointmentStatus = "pending" | "confirmed" | "done" | "missed" | "cancelled";
+
+export type NotificationType =
+  | "request_received"
+  | "request_approved_by_admin"
+  | "request_accepted_by_seller"
+  | "request_rejected"
+  | "appointment_confirmed"
+  | "appointment_reminder"
+  | "deal_done"
+  | "deal_failed"
+  | "listing_approved"
+  | "listing_rejected";
+
+// ---------- Tables ----------
+
+export interface User {
   id: string;
   createdAt: string;
   name: string;
-  phone: string;
-  intent: Intent;
-  reason: Reason;
-  locations: string[];
-  propertyTypes: PropertyType[];
-  areaPref: string;
-  roomsPref: string;
-  budgetMax: number;
-  timeline: Timeline;
-  lifestyleTags: string[];
-  locationNotes: string;
-  extraNotes: string;
-  isNotified: boolean;
+  email: string;
+  whatsapp: string;
+  // NOTE: localStorage-only mock; never use for real auth.
+  passwordHash: string;
+  accountType: AccountType;
+  isActive: boolean;
+  isVerified: boolean;
+  isAdmin?: boolean;
 }
 
-export type ListingStatus = "pending" | "approved" | "rejected" | "hidden";
+export interface Profile {
+  id: string;
+  userId: string;
+  // shared
+  governorate?: string;
+  city?: string;
+  area?: string;
+  generalGoal?: GeneralGoal;
+  // individual
+  sellReason?: SellReason;
+  buyReason?: BuyReason;
+  shortTermGoal?: string;
+  longTermGoal?: string;
+  budgetEgp?: number;
+  timeline?: Timeline;
+  // company / office
+  entityName?: string;
+  platformGoal?: PlatformGoal;
+  portfolioSize?: number;
+  // preferences (all)
+  preferredTypes?: PropertyType[];
+  preferredAreas?: string[];
+  areaSqmMin?: number;
+  areaSqmMax?: number;
+  specialization?: string;
+  extraNotes?: string;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  plan: SubscriptionPlan;
+  startedAt: string;
+  expiresAt?: string;
+  isActive: boolean;
+  paymentRef?: string;
+  amountEgp?: number;
+}
 
 export interface Listing {
   id: string;
   createdAt: string;
-  titleAr: string;
-  descriptionAr: string;
-  price: number;
-  priceType: PriceType;
+  updatedAt: string;
+  userId: string;
+
+  listingType: ListingType;
   propertyType: PropertyType;
+
+  // public location
+  governorate: string;
+  city: string;
+  area: string;
+
+  // hidden until appointment approval
+  fullAddress?: string;
+
+  // public specs
   areaSqm: number;
-  rooms: number;
-  floor: number;
-  locationName: string;       // specific area/village name e.g. "وسط البلد"
-  locationArea: "samalot" | "village";
-  villageName?: string;
-  phone: string;
-  whatsapp: string;
-  images: string[];           // URLs (data URLs in MVP)
-  isFeatured: boolean;
-  isApproved: boolean;
+  priceEgp: number;
+  priceType: PriceType;
+
+  // subscriber-only
+  description: string;
+  images: string[];
+  videoUrl?: string;
+
+  // hidden contact
+  contactPhone: string;
+
+  status: ListingStatus;
   rejectionReason?: string;
-  packageType: PackageType;
-  listerType: ListerType;
-  listerName: string;
-  expiresAt: string;
-  views?: number;
-  waClicks?: number;
-  isPaid?: boolean;
-  paidAt?: string;
+  adminNotes?: string;
+  isFeatured: boolean;
+  viewCount: number;
 }
 
-export interface Report {
+export interface AppointmentRequest {
   id: string;
-  listingId: string;
-  reason: string;
-  notes?: string;
   createdAt: string;
-  resolved?: boolean;
+  updatedAt: string;
+  requesterId: string;
+  listingId: string;
+  listingOwnerId: string;
+  status: RequestStatus;
+  rejectionReason?: string;
+  adminNotes?: string;
+  stageNotes?: string;
+  requesterApptId?: string;
+  ownerApptId?: string;
 }
 
-export const REPORT_REASONS = [
-  "إعلان مكرر",
-  "معلومات غير صحيحة",
-  "صور غير حقيقية",
-  "نصب أو احتيال",
-  "السعر غير منطقي",
-  "سبب آخر",
+export interface AvailableSlot {
+  id: string;
+  createdAt: string;
+  slotStart: string;
+  slotEnd: string;
+  isBooked: boolean;
+  bookedFor?: string; // appointment id
+}
+
+export interface Appointment {
+  id: string;
+  createdAt: string;
+  userId: string;
+  requestId: string;
+  slotId: string;
+  scheduledAt: string;
+  durationMin: number;
+  status: AppointmentStatus;
+  adminNotes?: string;
+}
+
+export interface Notification {
+  id: string;
+  createdAt: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body?: string;
+  isRead: boolean;
+  relatedId?: string;
+}
+
+// ---------- Constants ----------
+
+export const ACCOUNT_TYPES: AccountType[] = ["individual", "broker", "office", "developer"];
+export const PROPERTY_TYPES: PropertyType[] = [
+  "residential",
+  "commercial",
+  "agricultural",
+  "industrial",
+  "mountain",
+];
+export const LISTING_TYPES: ListingType[] = ["sell", "buy", "swap"];
+export const PRICE_TYPES: PriceType[] = ["fixed", "negotiable", "discussable"];
+export const TIMELINES: Timeline[] = ["under_1m", "3m", "6m", "1y", "flexible"];
+export const SELL_REASONS: SellReason[] = [
+  "housing",
+  "investment",
+  "emergency",
+  "travel",
+  "local_move",
+  "no_longer_needed",
+];
+export const BUY_REASONS: BuyReason[] = ["housing", "investment", "rental_income", "family_future"];
+export const PLATFORM_GOALS: PlatformGoal[] = [
+  "faster_sales",
+  "organized_sales",
+  "reach_buyers",
+  "geographic_expansion",
 ];
 
-export const AREAS = [
-  "سمالوط — وسط البلد",
-  "عزبة سلمان",
-  "الشيخ فضل",
-  "ههيا",
-  "بني أحمد",
-  "دير البرشا",
-  "ملوي (قريب)",
+export const SUBSCRIPTION_PLANS: {
+  plan: SubscriptionPlan;
+  priceEgp: number;
+  durationDays: number;
+}[] = [
+  { plan: "free", priceEgp: 0, durationDays: 36500 },
+  { plan: "basic", priceEgp: 199, durationDays: 30 },
+  { plan: "premium", priceEgp: 499, durationDays: 30 },
 ];
 
-export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
-  apartment: "شقة",
-  house: "منزل",
-  land_agri: "أرض زراعية",
-  land_build: "أرض بناء",
-  commercial: "محل تجاري",
-  building: "عمارة",
-};
-
-export const INTENT_LABELS: Record<Intent, string> = {
-  buy: "شراء عقار",
-  rent: "استئجار",
-  sell: "بيع عقار",
-  both: "بيع وشراء",
-};
-
-export const REASON_LABELS: Record<Reason, string> = {
-  live: "سكن واستقرار",
-  invest: "استثمار شخصي",
-  sidehustle: "دخل إضافي",
-  necessity: "ضرورة أو ظرف",
-  relocate: "سفر أو انتقال",
-};
-
-export const TIMELINE_LABELS: Record<Timeline, string> = {
-  "3m": "خلال 3 شهور",
-  "6m": "خلال 6 شهور",
-  "1y": "خلال سنة",
-};
-
-export const LIFESTYLE_TAGS = [
-  "هادية وعيلية",
-  "قريبة من المدارس",
-  "قريبة من المستشفيات",
-  "على طريق رئيسي",
-  "بعيدة عن الضوضاء",
-  "قريبة من المساجد",
-  "في منطقة شعبية / متوسطة",
-  "راقية / هادية",
-  "قريبة من الزراعة والطبيعة",
-  "سهولة الانتقال للقاهرة",
-];
-
-export const PACKAGES: Record<
-  PackageType,
-  { label: string; price: number; days: number; desc: string }
-> = {
-  basic: { label: "إعلان عادي", price: 30, days: 30, desc: "إعلان قياسي لمدة 30 يوم" },
-  featured: { label: "إعلان مميز", price: 100, days: 60, desc: "يظهر دائماً في المقدمة + شارة ذهبية" },
-  office: { label: "اشتراك مكتب", price: 200, days: 30, desc: "إعلانات غير محدودة + شارة مكتب" },
-};
+// Both-pay model: sellers pay a small flat listing fee
+export const SELLER_LISTING_FEE_EGP = 50;

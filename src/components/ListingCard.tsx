@@ -1,111 +1,66 @@
 import { Link } from "react-router-dom";
-import { MapPin, Maximize2, BedDouble, Crown, Heart, Clock } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { Listing } from "@/lib/types";
-import { PROPERTY_TYPE_LABELS } from "@/lib/types";
-import { isSaved, toggleSaved, listingStatus } from "@/lib/store";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { Lock, MapPin, Maximize2, Sparkles } from "lucide-react";
+import type { Listing, User } from "@/lib/types";
+import { fmtPrice, fmtSqm, t, useLang } from "@/lib/i18n";
+import { getUser } from "@/lib/store";
 
-export function ListingCard({ listing, showStatus }: { listing: Listing; showStatus?: boolean }) {
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    const sync = () => setSaved(isSaved(listing.id));
-    sync();
-    window.addEventListener("samalot:saved-changed", sync);
-    return () => window.removeEventListener("samalot:saved-changed", sync);
-  }, [listing.id]);
-
-  const onSave = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const next = toggleSaved(listing.id);
-    toast.success(next ? "تم حفظ الإعلان" : "تم إزالة الإعلان من المحفوظات");
-  };
-
-  const status = listingStatus(listing);
+export function ListingCard({ listing }: { listing: Listing }) {
+  const lang = useLang();
+  const owner: User | undefined = getUser(listing.userId);
 
   return (
     <Link
-      to={`/listing/${listing.id}`}
-      className="group surface-card overflow-hidden block transition-all hover:shadow-elevated hover:-translate-y-0.5"
+      to={`/listings/${listing.id}`}
+      className="surface-card group overflow-hidden hover:shadow-elevated transition-shadow flex flex-col"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        {listing.images[0] && (
-          <img
-            src={listing.images[0]}
-            alt={listing.titleAr}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+      <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+        {/* Photos blurred for non-subscribers — done via CSS in panel; card shows a neutral cover */}
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <Lock className="h-7 w-7 mx-auto mb-2 opacity-60" />
+            <p className="text-xs font-medium">{t("card.locked_photos", lang)}</p>
+          </div>
+        </div>
+        {listing.isFeatured && (
+          <span className="absolute top-3 start-3 inline-flex items-center gap-1 rounded-pill bg-gradient-gold text-primary-foreground px-2.5 py-1 text-xs font-medium shadow-sm">
+            <Sparkles className="h-3 w-3" />
+            {t("card.featured", lang)}
+          </span>
         )}
-        <div className="absolute top-3 right-3 flex flex-col gap-2">
-          <span className={`pill !py-1 !px-2.5 !text-[11px] ${
-            listing.priceType === "sale" ? "bg-primary text-primary-foreground border-primary" : "bg-success text-success-foreground border-success"
-          }`}>
-            {listing.priceType === "sale" ? "للبيع" : "للإيجار"}
-          </span>
-          {listing.isFeatured && (
-            <span className="pill !py-1 !px-2.5 !text-[11px] bg-gradient-gold text-primary-foreground border-transparent">
-              <Crown className="h-3 w-3" /> مميز
-            </span>
-          )}
-          {showStatus && status === "pending" && (
-            <span className="pill !py-1 !px-2.5 !text-[11px] bg-warning/20 text-warning border-warning/40">
-              <Clock className="h-3 w-3" /> قيد المراجعة
-            </span>
-          )}
-          {showStatus && status === "expired" && (
-            <span className="pill !py-1 !px-2.5 !text-[11px] bg-muted text-muted-foreground border-border">
-              منتهي
-            </span>
-          )}
-        </div>
-        <button
-          onClick={onSave}
-          aria-label={saved ? "إزالة من المحفوظات" : "حفظ الإعلان"}
-          className={cn(
-            "absolute top-3 left-3 h-9 w-9 rounded-full backdrop-blur-md flex items-center justify-center transition-all",
-            saved
-              ? "bg-primary text-primary-foreground"
-              : "bg-background/80 text-foreground hover:bg-background"
-          )}
-        >
-          <Heart className={cn("h-4 w-4", saved && "fill-current")} />
-        </button>
+        <span className="absolute top-3 end-3 rounded-pill bg-background/90 px-2.5 py-1 text-xs font-medium border border-border">
+          {t(`lt.${listing.listingType}`, lang)}
+        </span>
       </div>
-      <div className="p-4 space-y-3">
+
+      <div className="p-4 flex-1 flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs text-muted-foreground">{PROPERTY_TYPE_LABELS[listing.propertyType]}</span>
-          <span className="font-display text-lg font-bold text-primary ltr-num">
-            {listing.price.toLocaleString("en-US")} {listing.priceType === "rent" ? "/شهر" : ""}
-            <span className="text-xs font-body text-muted-foreground mr-1">جنيه</span>
+          <span className="font-display font-bold text-lg gradient-text">
+            {fmtPrice(listing.priceEgp, lang)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t(`prc.${listing.priceType}`, lang)}
           </span>
         </div>
-        <h3 className="font-bold text-sm leading-snug line-clamp-2 min-h-[2.5rem]">
-          {listing.titleAr}
-        </h3>
+
+        <div className="text-sm font-medium line-clamp-1">
+          {t(`pt.${listing.propertyType}`, lang)} · {fmtSqm(listing.areaSqm, lang)}
+        </div>
+
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <MapPin className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{listing.locationName}</span>
-        </div>
-        <div className="flex items-center gap-3 pt-2 border-t border-border text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Maximize2 className="h-3.5 w-3.5" />
-            <span className="ltr-num">{listing.areaSqm}</span> م²
+          <span className="truncate">
+            {listing.area}, {listing.city}
           </span>
-          {listing.rooms > 0 && (
-            <span className="flex items-center gap-1">
-              <BedDouble className="h-3.5 w-3.5" />
-              <span className="ltr-num">{listing.rooms}</span> غرف
-            </span>
-          )}
-          {listing.listerType !== "individual" && (
-            <span className="mr-auto text-primary">
-              {listing.listerType === "office" ? "مكتب" : "وسيط"}
-            </span>
-          )}
+        </div>
+
+        <div className="mt-auto pt-2 flex items-center justify-between text-xs border-t border-border">
+          <span className="text-muted-foreground">
+            {owner ? t(`at.${owner.accountType}`, lang) : "—"}
+          </span>
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Maximize2 className="h-3 w-3" />
+            {listing.viewCount}
+          </span>
         </div>
       </div>
     </Link>
