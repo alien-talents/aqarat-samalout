@@ -5,7 +5,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getUserByEmail, setSession, verifyPassword } from "@/lib/store";
+import { loginWithEmail } from "@/hooks/useAuth";
 import { t, useLang } from "@/lib/i18n";
 import { toast } from "sonner";
 
@@ -15,17 +15,22 @@ export default function Login() {
   const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    const u = getUserByEmail(email.trim());
-    if (!u || !verifyPassword(u.passwordHash, password)) {
+    setIsLoading(true);
+    
+    try {
+      await loginWithEmail(email.trim(), password);
+      toast.success(lang === "ar" ? "تم تسجيل الدخول" : "Logged in successfully");
+      const next = params.get("next") || "/dashboard";
+      nav(next);
+    } catch (error: any) {
       toast.error(lang === "ar" ? "بريد أو كلمة سر غلط" : "Invalid email or password");
-      return;
+    } finally {
+      setIsLoading(false);
     }
-    setSession(u.id);
-    const next = params.get("next") || "/dashboard";
-    nav(next);
   }
 
   return (
@@ -66,21 +71,18 @@ export default function Login() {
           </div>
           <Button
             type="submit"
+            disabled={isLoading}
             className="w-full bg-gradient-gold text-primary-foreground"
           >
-            {t("nav.login", lang)}
+            {isLoading 
+              ? (lang === "ar" ? "جاري الدخول..." : "Logging in...")
+              : t("nav.login", lang)}
           </Button>
           <div className="text-center text-sm text-muted-foreground">
             {lang === "ar" ? "ما عندكش حساب؟" : "No account?"}{" "}
             <Link to="/register" className="text-primary font-medium">
               {t("nav.register", lang)}
             </Link>
-          </div>
-          <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground space-y-1">
-            <div className="font-medium">
-              {lang === "ar" ? "حسابات تجريبية (كلمة السر: demo1234):" : "Demo accounts (password: demo1234):"}
-            </div>
-            <div>admin@samalot.app · ahmed@example.com · nile@example.com · hoda@example.com</div>
           </div>
         </form>
       </main>

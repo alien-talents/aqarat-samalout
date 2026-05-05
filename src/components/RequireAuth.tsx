@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { getCurrentUser } from "@/lib/store";
+import { useAuth } from "@/hooks/useAuth";
 
 export function RequireAuth({
   children,
@@ -8,9 +8,13 @@ export function RequireAuth({
   children: React.ReactNode;
   admin?: boolean;
 }) {
-  const u = getCurrentUser();
+  const { user, isLoading } = useAuth();
   const loc = useLocation();
-  if (!u) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
-  if (admin && !u.isAdmin) return <Navigate to="/" replace />;
+  
+  // Show nothing while checking auth state
+  if (isLoading) return null;
+  
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
+  if (admin && !user.isAdmin) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

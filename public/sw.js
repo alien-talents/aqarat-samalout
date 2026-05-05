@@ -1,10 +1,10 @@
-const CACHE_NAME = 'aqarat-samalout-v1';
+const CACHE_NAME = 'aqarat-samalout-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/src/main.tsx',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  '/manifest.json',
+  '/icon-192x192.svg',
+  '/icon-512x512.svg'
 ];
 
 // Install event - cache static assets
@@ -35,9 +35,10 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests and Supabase API calls
+  // Skip non-GET requests and API calls
   if (event.request.method !== 'GET' || 
-      event.request.url.includes('supabase.co')) {
+      event.request.url.includes('supabase.co') ||
+      event.request.url.includes('localhost:54321')) {
     return;
   }
 
@@ -84,8 +85,8 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body || 'لديك إشعار جديد',
-    icon: '/icon-192x192.png',
-    badge: '/icon-72x72.png',
+    icon: '/icon-192x192.svg',
+    badge: '/icon-192x192.svg',
     tag: data.tag || 'default',
     requireInteraction: true,
     actions: data.actions || [],

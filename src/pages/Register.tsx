@@ -12,14 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  getUserByEmail,
-  hashPassword,
-  nowISO,
-  saveUser,
-  setSession,
-  uid,
-} from "@/lib/store";
+import { registerWithEmail } from "@/hooks/useAuth";
 import type { AccountType } from "@/lib/types";
 import { ACCOUNT_TYPES } from "@/lib/types";
 import { t, useLang } from "@/lib/i18n";
@@ -33,27 +26,25 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("individual");
+  const [isLoading, setIsLoading] = useState(false);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    if (getUserByEmail(email)) {
-      toast.error(lang === "ar" ? "البريد مستخدم" : "Email already in use");
-      return;
+    setIsLoading(true);
+    
+    try {
+      await registerWithEmail(email.trim(), password, {
+        name: name.trim(),
+        whatsapp: whatsapp.trim(),
+        account_type: accountType,
+      });
+      toast.success(lang === "ar" ? "تم إنشاء الحساب" : "Account created successfully");
+      nav("/profile-setup");
+    } catch (error: any) {
+      toast.error(error.message || (lang === "ar" ? "حدث خطأ" : "An error occurred"));
+    } finally {
+      setIsLoading(false);
     }
-    const id = uid();
-    saveUser({
-      id,
-      createdAt: nowISO(),
-      name: name.trim(),
-      email: email.trim(),
-      whatsapp: whatsapp.trim(),
-      passwordHash: hashPassword(password),
-      accountType,
-      isActive: true,
-      isVerified: false,
-    });
-    setSession(id);
-    nav("/profile-setup");
   }
 
   return (
@@ -123,9 +114,12 @@ export default function Register() {
 
           <Button
             type="submit"
+            disabled={isLoading}
             className="w-full bg-gradient-gold text-primary-foreground"
           >
-            {t("g.next", lang)}
+            {isLoading 
+              ? (lang === "ar" ? "جاري التسجيل..." : "Creating account...")
+              : t("g.next", lang)}
           </Button>
           <div className="text-center text-sm text-muted-foreground">
             {lang === "ar" ? "عندك حساب؟" : "Have an account?"}{" "}

@@ -68,9 +68,30 @@ export function useCreateListing() {
   
   return useMutation({
     mutationFn: async (listing: Omit<Listing, 'id' | 'createdAt' | 'updatedAt'>) => {
+      // Convert camelCase to snake_case for Supabase
+      const dbListing = {
+        user_id: listing.userId,
+        listing_type: listing.listingType,
+        property_type: listing.propertyType,
+        governorate: listing.governorate,
+        city: listing.city,
+        area: listing.area,
+        full_address: listing.fullAddress,
+        area_sqm: listing.areaSqm,
+        price_egp: listing.priceEgp,
+        price_type: listing.priceType,
+        description: listing.description,
+        images: listing.images,
+        video_url: listing.videoUrl,
+        contact_phone: listing.contactPhone,
+        status: listing.status,
+        is_featured: listing.isFeatured,
+        view_count: listing.viewCount,
+      };
+      
       const { data, error } = await supabase
         .from('listings')
-        .insert([listing])
+        .insert([dbListing])
         .select()
         .single();
       if (error) throw error;

@@ -13,26 +13,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  getCurrentUser,
-  nowISO,
-  saveListing,
-  uid,
-} from "@/lib/store";
+import { useAuth } from "@/hooks/useAuth";
+import { useCreateListing } from "@/hooks/useSupabase";
 import {
   LISTING_TYPES,
   PRICE_TYPES,
   PROPERTY_TYPES,
   SELLER_LISTING_FEE_EGP,
 } from "@/lib/types";
-import type { Listing, ListingType, PriceType, PropertyType } from "@/lib/types";
+import type { ListingType, PriceType, PropertyType } from "@/lib/types";
 import { t, useLang } from "@/lib/i18n";
 import { toast } from "sonner";
 
 export default function NewListing() {
   const lang = useLang();
   const nav = useNavigate();
-  const user = getCurrentUser();
+  const { user, isLoading: authLoading } = useAuth();
+  const createListing = useCreateListing();
 
   const [listingType, setListingType] = useState<ListingType>("sell");
   const [propertyType, setPropertyType] = useState<PropertyType>("residential");
@@ -47,47 +44,54 @@ export default function NewListing() {
   const [contactPhone, setContactPhone] = useState(user?.whatsapp ?? "");
   const [imagesText, setImagesText] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  if (authLoading) return null;
+  
   if (!user) {
     nav("/login?next=/listings/new");
     return null;
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    const id = uid();
-    const listing: Listing = {
-      id,
-      createdAt: nowISO(),
-      updatedAt: nowISO(),
-      userId: user!.id,
-      listingType,
-      propertyType,
-      governorate,
-      city,
-      area,
-      fullAddress: fullAddress || undefined,
-      areaSqm: Number(areaSqm) || 0,
-      priceEgp: Number(priceEgp) || 0,
-      priceType,
-      description,
-      images: imagesText
-        .split(/[\n,]/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-      videoUrl: videoUrl || undefined,
-      contactPhone,
-      status: "pending_review",
-      isFeatured: false,
-      viewCount: 0,
-    };
-    saveListing(listing);
-    toast.success(
-      lang === "ar"
-        ? `تم إرسال الإعلان للمراجعة (رسم ${SELLER_LISTING_FEE_EGP} ج.م)`
-        : `Listing submitted for review (${SELLER_LISTING_FEE_EGP} EGP fee)`,
-    );
-    nav("/dashboard?tab=listings");
+    setIsSubmitting(true);
+    
+    try {
+      await createListing.mutateAsync({
+        userId: user.id,
+        listingType,
+        propertyType,
+        governorate,
+        city,
+        area,
+        fullAddress: fullAddress || undefined,
+        areaSqm: Number(areaSqm) || 0,
+        priceEgp: Number(priceEgp) || 0,
+        priceType,
+        description,
+        images: imagesText
+          .split(/[\n,]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+        videoUrl: videoUrl || undefined,
+        contactPhone,
+        status: "pending_review",
+        isFeatured: false,
+        viewCount: 0,
+      });
+      
+      toast.success(
+        lang === "ar"
+          ? `تم إرسال الإعلان للمراجعة (رسم ${SELLER_LISTING_FEE_EGP} ج.م)`
+          : `Listing submitted for review (${SELLER_LISTING_FEE_EGP} EGP fee)`,
+      );
+      nav("/dashboard?tab=listings");
+    } catch (error: any) {
+      toast.error(error.message || (lang === "ar" ? "حدث خطأ" : "An error occurred"));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -252,8 +256,14 @@ export default function NewListing() {
               <Button type="button" variant="ghost" onClick={() => nav("/dashboard")}>
                 {t("g.cancel", lang)}
               </Button>
-              <Button type="submit" className="bg-gradient-gold text-primary-foreground">
-                {t("g.submit", lang)}
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="bg-gradient-gold text-primary-foreground"
+              >
+                {isSubmitting 
+                  ? (lang === "ar" ? "جاري الإرسال..." : "Submitting...")
+                  : t("g.submit", lang)}
               </Button>
             </div>
           </form>

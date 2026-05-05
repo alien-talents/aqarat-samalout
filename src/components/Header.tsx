@@ -8,34 +8,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useEffect, useState } from "react";
-import { getCurrentUser, setSession } from "@/lib/store";
-import type { User } from "@/lib/types";
+import { useAuth, logout } from "@/hooks/useAuth";
 import { setLang, t, useLang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import { PWABadge } from "./PWAInstallPrompt";
+import { toast } from "sonner";
 
 export function Header() {
   const lang = useLang();
   const loc = useLocation();
   const nav = useNavigate();
-  const [user, setUser] = useState<User | null>(getCurrentUser());
+  const { user, isLoading } = useAuth();
 
-  useEffect(() => {
-    const refresh = () => {
-      const u = getCurrentUser();
-      setUser(u);
-    };
-    refresh();
-    const events = [
-      "samalot:session-changed",
-      "samalot:notifications-changed",
-      "samalot:users-changed",
-    ];
-    events.forEach((e) => window.addEventListener(e, refresh));
-    return () => events.forEach((e) => window.removeEventListener(e, refresh));
-  }, []);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success(lang === "ar" ? "تم تسجيل الخروج" : "Logged out successfully");
+      nav("/");
+    } catch (error) {
+      toast.error(lang === "ar" ? "حدث خطأ" : "An error occurred");
+    }
+  };
 
   const navItems = [
     { to: "/", label: t("nav.marketplace", lang) },
@@ -111,12 +105,7 @@ export function Header() {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSession(null);
-                      nav("/");
-                    }}
-                  >
+                  <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="h-4 w-4 me-2" />
                     {t("nav.logout", lang)}
                   </DropdownMenuItem>
